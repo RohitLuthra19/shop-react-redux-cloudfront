@@ -8,5 +8,10 @@ const app = new cdk.App();
 
 
 new DeployWebAppStack(app, 'DeployWebAppStack', {});
-new ProductServiceStack(app, 'ProductServiceStack', {});
-new ImportServiceStack(app, 'ImportServiceStack', {});
+
+
+const productServiceStack = new ProductServiceStack(app, 'ProductServiceStack', {});
+
+new ImportServiceStack(app, 'ImportServiceStack', {
+  catalogItemsQueueUrl: productServiceStack.catalogItemsQueue.queueUrl,
+});

@@ -5,9 +5,11 @@ import {
   DeleteObjectCommand,
 } from "@aws-sdk/client-s3";
 import { Readable } from "stream";
-import { finished } from "stream/promises";
+//import { finished } from "stream/promises";
 import csv from "csv-parser";
-
+import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs";
+const sqsClient = new SQSClient({ region: process.env.AWS_REGION });
+const CATALOG_ITEMS_QUEUE_URL = process.env.CATALOG_ITEMS_QUEUE_URL;
 const s3Client = new S3Client({ region: process.env.AWS_REGION });
 const BUCKET_NAME = process.env.BUCKET_NAME;
 const UPLOADED_FOLDER = process.env.UPLOADED_FOLDER;
@@ -26,9 +28,9 @@ async function getS3ObjectStream(key: string): Promise<Readable | null> {
   return response.Body as Readable;
 }
 
-async function parseCsvStream(stream: Readable): Promise<void> {
+/* async function parseCsvStream(stream: Readable): Promise<void> {
   const parser = stream.pipe(csv());
-  parser.on("data", (data: any) => {
+  parser.on("data", async (data: any) => {
     console.log("Parsed record:", data);
     // process the data here
   });
@@ -36,8 +38,20 @@ async function parseCsvStream(stream: Readable): Promise<void> {
     console.error("Error parsing CSV:", error);
   });
   await finished(parser);
-}
+} */
 
+async function parseCsvStream(stream: Readable) {
+  const parser = stream.pipe(csv());
+  for await (const data of parser) {
+    // Send each record to SQS instead of logging
+    await sqsClient.send(
+      new SendMessageCommand({
+        QueueUrl: CATALOG_ITEMS_QUEUE_URL,
+        MessageBody: JSON.stringify(data),
+      })
+    );
+  }
+}
 async function moveFile(key: string): Promise<void> {
   if (!UPLOADED_FOLDER || !PARSED_FOLDER) {
     throw new Error(

@@ -2,11 +2,17 @@ import * as cdk from "aws-cdk-lib";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as apigateway from "aws-cdk-lib/aws-apigateway";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
+import * as sqs from "aws-cdk-lib/aws-sqs";
+import * as sns from "aws-cdk-lib/aws-sns";
+import * as subs from "aws-cdk-lib/aws-sns-subscriptions";
 import { Construct } from "constructs";
 import * as path from "path";
 import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
+import * as lambdaEventSources from "aws-cdk-lib/aws-lambda-event-sources";
 
 export class ProductServiceStack extends cdk.Stack {
+  public readonly catalogItemsQueue: sqs.Queue;
+
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
@@ -133,5 +139,37 @@ export class ProductServiceStack extends cdk.Stack {
       "GET",
       new apigateway.LambdaIntegration(getProductsByIdLambda)
     );
+
+    this.catalogItemsQueue = new sqs.Queue(this, "catalogItemsQueue", {
+      visibilityTimeout: cdk.Duration.seconds(60),
+      receiveMessageWaitTime: cdk.Duration.seconds(10),
+    });
+
+    const createProductTopic = new sns.Topic(this, "createProductTopic");
+    createProductTopic.addSubscription(
+      new subs.EmailSubscription("rohit.luthra19@gmail.com")
+    );
+
+    const catalogBatchProcessLambda = new NodejsFunction(
+      this,
+      "catalogBatchProcess",
+      {
+        entry: path.join(__dirname, "./catalogBatchProcess/index.ts"),
+        handler: "handler",
+        runtime: lambda.Runtime.NODEJS_18_X,
+        timeout: cdk.Duration.seconds(30),
+        environment: {
+          PRODUCTS_TABLE_NAME: productsTable.tableName,
+          STOCK_TABLE_NAME: stockTable.tableName,
+          CREATE_PRODUCT_TOPIC_ARN: createProductTopic.topicArn,
+        },
+        events: [
+          new lambdaEventSources.SqsEventSource(this.catalogItemsQueue, {
+            batchSize: 5,
+          }),
+        ],
+      }
+    );
+    createProductTopic.grantPublish(catalogBatchProcessLambda);
   }
 }
