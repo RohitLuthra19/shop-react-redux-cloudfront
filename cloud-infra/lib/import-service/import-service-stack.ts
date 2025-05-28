@@ -2,6 +2,7 @@ import * as cdk from "aws-cdk-lib";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as apigateway from "aws-cdk-lib/aws-apigateway";
 import * as s3 from "aws-cdk-lib/aws-s3";
+import * as sqs from "aws-cdk-lib/aws-sqs";
 import * as s3notifications from "aws-cdk-lib/aws-s3-notifications";
 import * as iam from "aws-cdk-lib/aws-iam";
 import { Construct } from "constructs";
@@ -115,12 +116,24 @@ export class ImportServiceStack extends cdk.Stack {
       uploadedFolderName
     );
     createApiGateway(this, importProductsFileLambda);
-    createImportFileParserLambda(
+
+    const catalogItemsQueue = sqs.Queue.fromQueueAttributes(
+      this,
+      "CatalogItemsQueueRef",
+      {
+        queueUrl: props.catalogItemsQueueUrl,
+        queueArn: `arn:aws:sqs:${cdk.Stack.of(this).region}:${
+          cdk.Stack.of(this).account
+        }:ProductServiceStack-catalogItemsQueue*`,
+      }
+    );
+    const importFileParserLambda = createImportFileParserLambda(
       this,
       importBucket,
       uploadedFolderName,
       parsedFolderName,
       props.catalogItemsQueueUrl
     );
+    catalogItemsQueue.grantSendMessages(importFileParserLambda);
   }
 }

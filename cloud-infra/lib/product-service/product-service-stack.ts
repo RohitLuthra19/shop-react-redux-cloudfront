@@ -30,15 +30,22 @@ export class ProductServiceStack extends cdk.Stack {
       tableName: STOCK_TABLE_NAME,
     }); */
     // Import existing DynamoDB tables
-    const productsTable = dynamodb.Table.fromTableName(
+    const PRODUCTS_TABLE_ARN = `arn:aws:dynamodb:${cdk.Stack.of(this).region}:${
+      cdk.Stack.of(this).account
+    }:table/${PRODUCTS_TABLE_NAME}`;
+    const productsTable = dynamodb.Table.fromTableArn(
       this,
       "ProductsTable",
-      PRODUCTS_TABLE_NAME
+      PRODUCTS_TABLE_ARN
     );
-    const stockTable = dynamodb.Table.fromTableName(
+
+    const STOCK_TABLE_ARN = `arn:aws:dynamodb:${cdk.Stack.of(this).region}:${
+      cdk.Stack.of(this).account
+    }:table/${STOCK_TABLE_NAME}`;
+    const stockTable = dynamodb.Table.fromTableArn(
       this,
       "StockTable",
-      STOCK_TABLE_NAME
+      STOCK_TABLE_ARN
     );
 
     // Lambda function for getProductsList
@@ -171,5 +178,7 @@ export class ProductServiceStack extends cdk.Stack {
       }
     );
     createProductTopic.grantPublish(catalogBatchProcessLambda);
+    productsTable.grantWriteData(catalogBatchProcessLambda);
+    stockTable.grantWriteData(catalogBatchProcessLambda);
   }
 }

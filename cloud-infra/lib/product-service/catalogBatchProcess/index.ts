@@ -33,7 +33,7 @@ export const handler = async (event: SQSEvent) => {
           Put: {
             TableName: stockTableName,
             Item: {
-              productId: { S: productId },
+              product_id: { S: productId },
               count: { N: body.count.toString() },
             },
           },
