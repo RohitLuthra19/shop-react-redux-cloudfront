@@ -8,6 +8,7 @@ import * as iam from "aws-cdk-lib/aws-iam";
 import { Construct } from "constructs";
 import * as path from "path";
 import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
+import { handler as basicAuthorizerLambda } from "../authorization-service/basicAuthorizer";
 
 function createImportBucket(scope: cdk.Stack) {
   const importBucket = new s3.Bucket(scope, "ImportBucket", {
@@ -87,19 +88,26 @@ function createImportFileParserLambda(
 
 function createApiGateway(
   scope: cdk.Stack,
-  importProductsFileLambda: lambda.Function
+  importProductsFileLambda: lambda.Function,
+  authorizer: apigateway.TokenAuthorizer
 ) {
   const api = new apigateway.RestApi(scope, "ImportServiceAPI");
   const importResource = api.root.addResource("import");
+
   importResource.addMethod(
     "GET",
-    new apigateway.LambdaIntegration(importProductsFileLambda)
+    new apigateway.LambdaIntegration(importProductsFileLambda),
+    {
+      authorizer,
+      authorizationType: apigateway.AuthorizationType.CUSTOM,
+    }
   );
   return api;
 }
 
 interface ImportServiceStackProps extends cdk.StackProps {
   catalogItemsQueueUrl: string;
+  basicAuthorizerLambda: lambda.IFunction;
 }
 
 export class ImportServiceStack extends cdk.Stack {
@@ -115,7 +123,14 @@ export class ImportServiceStack extends cdk.Stack {
       importBucket,
       uploadedFolderName
     );
-    createApiGateway(this, importProductsFileLambda);
+    const authorizer = new apigateway.TokenAuthorizer(
+      this,
+      "ImportAuthorizer",
+      {
+        handler: props.basicAuthorizerLambda, 
+      }
+    );
+    createApiGateway(this, importProductsFileLambda, authorizer);
 
     const catalogItemsQueue = sqs.Queue.fromQueueAttributes(
       this,

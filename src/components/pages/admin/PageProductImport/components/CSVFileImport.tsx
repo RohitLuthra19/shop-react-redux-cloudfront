@@ -27,10 +27,27 @@ export default function CSVFileImport({ url, title }: CSVFileImportProps) {
     if (!file) return;
     try {
       console.log("uploadFile to", url);
-
+      const authorization_token = localStorage.getItem("authorization_token");
       const response = await axios.get(url, {
         params: { name: encodeURIComponent(file.name) },
+        headers: {
+          Authorization: `Basic ${authorization_token}`,
+        },
+        validateStatus: () => true,
       });
+
+      if (response.status === 401) {
+        alert("Unauthorized: Please provide valid credentials.");
+        return;
+      }
+      if (response.status === 403) {
+        alert("Forbidden: Invalid credentials.");
+        return;
+      }
+      if (!response.data?.signedUrl) {
+        alert("Upload failed!");
+        return;
+      }
 
       console.log("Response: ", response);
       const presignedUrl = response.data?.signedUrl;
